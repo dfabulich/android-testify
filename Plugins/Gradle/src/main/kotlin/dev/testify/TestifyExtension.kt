@@ -25,13 +25,13 @@
 
 package dev.testify
 
+import dev.testify.internal.VariantPackageIdStore
 import dev.testify.internal.android
-import dev.testify.internal.applicationTargetPackageId
 import dev.testify.internal.inferredAndroidTestInstallTask
-import dev.testify.internal.inferredDefaultTestVariantId
 import dev.testify.internal.inferredInstallTask
 import org.gradle.api.GradleException
 import org.gradle.api.Project
+import org.gradle.api.provider.Provider
 
 internal data class TestifySettings(
 
@@ -56,24 +56,24 @@ internal data class TestifySettings(
     val useTestStorage: Boolean,
 
     /**
-     * The package ID for the test APK
+     * The package ID for the test APK (resolved at execution time via onVariants API when inferred).
      *
      * For a typical application, testify requires two APKs: the target apk under test,
      * and a test apk containing your tests.
      *
      * e.g. com.testify.example.test
      */
-    val testPackageId: String,
+    val testPackageIdProvider: Provider<String>,
 
     /**
-     * The package ID for the APK under test
+     * The package ID for the APK under test (resolved at execution time via onVariants API when inferred).
      *
      * For a typical application, testify requires two APKs: the target apk under test,
      * and a test apk containing your tests.
      *
      * e.g. com.testify.example
      */
-    val targetPackageId: String,
+    val targetPackageIdProvider: Provider<String>,
     val installTask: String?,
     val installAndroidTestTask: String?,
     val autoImplementLibrary: Boolean = true,
@@ -118,8 +118,12 @@ internal data class TestifySettings(
                 ?: "src/androidTest/assets"
             val testRunner = extension.testRunner ?: android.defaultConfig.testInstrumentationRunner ?: "unknown"
             val pullWaitTime = extension.pullWaitTime ?: 0L
-            val testPackageId = extension.testPackageId ?: project.inferredDefaultTestVariantId
-            val targetPackageId = extension.applicationPackageId ?: project.inferredTargetPackageId
+            val testPackageIdProvider = extension.testPackageId?.let { project.provider { it } }
+                ?: VariantPackageIdStore.getTestPackageIdProvider(project)
+                ?: project.provider { "" }
+            val targetPackageIdProvider = extension.applicationPackageId?.let { project.provider { it } }
+                ?: VariantPackageIdStore.getApplicationPackageIdProvider(project)
+                ?: project.provider { "" }
             val version = TestifySettings::class.java.getPackage().implementationVersion
             val isSnapshot = version?.contains("SNAPSHOT", ignoreCase = true) ?: false
             val autoImplementLibrary = extension.autoImplementLibrary ?: !isSnapshot
@@ -142,8 +146,8 @@ internal data class TestifySettings(
                 testRunner = testRunner,
                 useSdCard = useSdCard,
                 useTestStorage = useTestStorage,
-                testPackageId = testPackageId,
-                targetPackageId = targetPackageId,
+                testPackageIdProvider = testPackageIdProvider,
+                targetPackageIdProvider = targetPackageIdProvider,
                 installTask = installTask,
                 installAndroidTestTask = installAndroidTestTask,
                 autoImplementLibrary = autoImplementLibrary,
@@ -155,10 +159,11 @@ internal data class TestifySettings(
         }
     }
 
-    fun validate() {
+    fun validate(project: Project) {
+        val extension = project.getTestifyExtension()
         val (propertyName, examplePackage) = when {
-            targetPackageId.isEmpty() -> "applicationPackageId" to "com.example.app"
-            testPackageId.isEmpty() -> "testPackageId" to "com.example.app.test"
+            extension.applicationPackageId?.isEmpty() == true -> "applicationPackageId" to "com.example.app"
+            extension.testPackageId?.isEmpty() == true -> "testPackageId" to "com.example.app.test"
             else -> null to null
         }
 
@@ -175,27 +180,6 @@ internal data class TestifySettings(
         }
     }
 }
-
-/**
- * Infer the package ID for the app under test.
- *
- * For an application this is usually just the applicationId e.g. com.testify.example
- * However, the app under test may have been modified by an applicationIdSuffix (e.g. .debug).
- * Or, it may not be an app at all and could be a library project. In this case, you must specify
- * the `applicationPackageId` in your `testify` extension block.
- */
-private val Project.inferredTargetPackageId: String
-    get() {
-        var targetPackageId: String? = this.applicationTargetPackageId
-
-        // If we still do not have a targetPackageId, it is likely a library project
-        // Infer the package from the test configuration
-        if (targetPackageId.isNullOrEmpty()) {
-            targetPackageId = this.inferredDefaultTestVariantId
-        }
-
-        return targetPackageId
-    }
 
 open class TestifyExtension {
 

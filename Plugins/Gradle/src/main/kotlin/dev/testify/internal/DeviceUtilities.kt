@@ -31,20 +31,23 @@ import dev.testify.testifySettings
 import org.gradle.api.Project
 import java.io.File
 
-internal val Project.root: String
+internal fun Project.root(targetPackageId: String): String {
     @Suppress("SdCardPath")
-    get() = testifySettings.rootDestinationDirectory ?: if (testifySettings.useSdCard) {
-        "/sdcard/Android/data/${testifySettings.targetPackageId}/files/testify_"
+    return testifySettings.rootDestinationDirectory ?: if (testifySettings.useSdCard) {
+        "/sdcard/Android/data/$targetPackageId/files/testify_"
     } else {
         "./app_"
     }
+}
 
-internal val Project.screenshotDirectory: String
-    get() = if (testifySettings.useSdCard) {
-        "${root}images/"
+internal fun Project.screenshotDirectory(targetPackageId: String): String {
+    val r = root(targetPackageId)
+    return if (testifySettings.useSdCard) {
+        "${r}images/"
     } else {
-        "${root}images/$SCREENSHOT_DIR"
+        "${r}images/$SCREENSHOT_DIR"
     }
+}
 
 internal fun Adb.listFiles(path: String): List<String> {
     val log = this
@@ -87,8 +90,8 @@ internal fun listFailedScreenshots(
     return files.map { it.replace(src, dst) }
 }
 
-internal val Project.reportFilePath: String
-    get() = "${root.replace("testify_", "")}testify"
+internal fun Project.reportFilePath(targetPackageId: String): String =
+    "${root(targetPackageId).replace("testify_", "")}testify"
 
 internal fun File.deleteOnDevice(targetPackageId: String) {
     Adb()

@@ -40,22 +40,16 @@ import org.gradle.api.tasks.Input
 
 open class ReportShowTask : ReportTask() {
 
-    @get:Input
-    lateinit var reportFilePath: String
-
-    @get:Input
-    lateinit var targetPackageId: String
-
     override fun getDescription() = "Print the test result report to the console"
 
     override fun provideInput(project: Project) {
         super.provideInput(project)
-        reportFilePath = project.reportFilePath
-        targetPackageId = project.testifySettings.targetPackageId
+        inputs.property("targetPackageId", project.testifySettings.targetPackageIdProvider)
     }
 
     override fun taskAction() {
-        val reportFilePath = reportFilePath
+        val targetPackageId = project.testifySettings.targetPackageIdProvider.get()
+        val reportFilePath = project.reportFilePath(targetPackageId)
         val files = Adb()
             .shell()
             .runAs(targetPackageId)
@@ -67,10 +61,10 @@ open class ReportShowTask : ReportTask() {
             return
         }
 
-        show(sourceFilePath = file)
+        show(sourceFilePath = file, targetPackageId = targetPackageId)
     }
 
-    private fun show(sourceFilePath: String) {
+    private fun show(sourceFilePath: String, targetPackageId: String) {
         Adb()
             .execOut()
             .runAs(targetPackageId)

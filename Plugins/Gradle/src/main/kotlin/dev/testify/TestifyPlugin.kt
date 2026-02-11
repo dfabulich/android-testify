@@ -27,6 +27,7 @@ package dev.testify
 
 import dev.testify.TestifyPlugin.Companion.EVALUATED_SETTINGS
 import dev.testify.internal.Adb
+import dev.testify.internal.VariantPackageIdStore
 import dev.testify.internal.Style.Description
 import dev.testify.internal.android
 import dev.testify.internal.isVerbose
@@ -61,6 +62,7 @@ class TestifyPlugin : Plugin<Project> {
         with(project) {
             styledTextOutput = project.serviceOf<StyledTextOutputFactory>().create("testifyOutput")
             extensions.create(TestifyExtension.NAME, TestifyExtension::class.java)
+            VariantPackageIdStore.register(project)
             createTasks()
             afterEvaluate(AfterEvaluate)
         }
@@ -69,7 +71,7 @@ class TestifyPlugin : Plugin<Project> {
     private object AfterEvaluate : Action<Project> {
         override fun execute(project: Project) {
             val settings = TestifySettings.create(project)
-            settings.validate()
+            settings.validate(project)
             project.extensions.add(EVALUATED_SETTINGS, settings)
 
             project.addManifestPlaceholders(settings)
@@ -94,7 +96,7 @@ class TestifyPlugin : Plugin<Project> {
             val module = settings.moduleName
             val isRecordMode = settings.isRecordMode.toString()
             val parallelThreads = settings.parallelThreads.toString()
-            android.defaultConfig {
+            android.defaultConfig.apply {
                 resValue("string", "testifyDestination", destination)
                 resValue("string", "testifyModule", module)
                 resValue("string", "isRecordMode", isRecordMode)

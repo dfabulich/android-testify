@@ -47,15 +47,6 @@ open class SettingsTask : TestifyUtilityTask() {
     lateinit var moduleName: String
 
     @get:Input
-    lateinit var screenshotDirectory: String
-
-    @get:Input
-    lateinit var targetPackageId: String
-
-    @get:Input
-    lateinit var testPackageId: String
-
-    @get:Input
     lateinit var testRunner: String
 
     @get:Input
@@ -103,18 +94,20 @@ open class SettingsTask : TestifyUtilityTask() {
             this@SettingsTask.outputFileNameFormat = this.outputFileNameFormat
             this@SettingsTask.pullWaitTime = this.pullWaitTime
             this@SettingsTask.screenshotAnnotation = this.screenshotAnnotation
-            this@SettingsTask.targetPackageId = this.targetPackageId
-            this@SettingsTask.testPackageId = this.testPackageId
+            inputs.property("targetPackageId", this.targetPackageIdProvider)
+            inputs.property("testPackageId", this.testPackageIdProvider)
             this@SettingsTask.testRunner = this.testRunner
             this@SettingsTask.useSdCard = this.useSdCard
             this@SettingsTask.useTestStorage = this.useTestStorage
         }
-        this@SettingsTask.reportFilePath = project.reportFilePath
-        this@SettingsTask.screenshotDirectory = project.screenshotDirectory
     }
 
     override fun taskAction() {
         val userId = Adb.forcedUser?.toString() ?: Device.user.takeUnless { Device.isEmpty } ?: "Device not found"
+        val targetPackageId = project.testifySettings.targetPackageIdProvider.get()
+        val testPackageId = project.testifySettings.testPackageIdProvider.get()
+        val reportFilePath = project.reportFilePath(targetPackageId)
+        val screenshotDirectory = project.screenshotDirectory(targetPackageId)
 
         println("  baselineSourceDir      = $baselineSourceDir")
         println("  installAndroidTestTask = $installAndroidTestTask")

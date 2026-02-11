@@ -75,9 +75,6 @@ open class ScreenshotTestTask : TestifyDefaultTask() {
     lateinit var screenshotAnnotation: String
 
     @get:Input
-    lateinit var testPackageId: String
-
-    @get:Input
     lateinit var testRunner: String
 
     @get:Input
@@ -146,12 +143,13 @@ open class ScreenshotTestTask : TestifyDefaultTask() {
         shardIndex = project.properties["shardIndex"] as Int?
         testClass = project.properties["testClass"] as String?
         testName = project.properties["testName"] as String?
-        testPackageId = project.testifySettings.testPackageId
+        inputs.property("testPackageId", project.testifySettings.testPackageIdProvider)
         testRunner = project.testifySettings.testRunner
         useSdCard = "TESTIFY_USE_SDCARD".fromEnv(project.testifySettings.useSdCard)
     }
 
     override fun taskAction() {
+        val testPackageId = project.testifySettings.testPackageIdProvider.get()
         val testOptions = TestOptionsBuilder()
         testOptions
             .addAll(shardParams)

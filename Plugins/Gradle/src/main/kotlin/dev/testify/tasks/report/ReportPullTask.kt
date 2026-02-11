@@ -48,12 +48,6 @@ import java.io.FileOutputStream
 open class ReportPullTask : ReportTask() {
 
     @get:Input
-    lateinit var reportFilePath: String
-
-    @get:Input
-    lateinit var targetPackageId: String
-
-    @get:Input
     var isVerbose: Boolean = false
 
     @get:Input
@@ -64,16 +58,15 @@ open class ReportPullTask : ReportTask() {
 
     override fun provideInput(project: Project) {
         super.provideInput(project)
-        reportFilePath = project.reportFilePath
-        targetPackageId = project.testifySettings.targetPackageId
+        inputs.property("targetPackageId", project.testifySettings.targetPackageIdProvider)
         isVerbose = project.isVerbose
         pullWaitTime = project.testifySettings.pullWaitTime
     }
 
     override fun taskAction() {
+        val targetPackageId = project.testifySettings.targetPackageIdProvider.get()
+        val reportFilePath = project.reportFilePath(targetPackageId)
         println("  Pulling report:")
-
-        val reportFilePath = reportFilePath
         val files = Adb()
             .shell()
             .runAs(targetPackageId)
@@ -92,13 +85,13 @@ open class ReportPullTask : ReportTask() {
             return
         }
 
-        pull(sourceFilePath = file, destinationPath = destinationPath)
+        pull(sourceFilePath = file, destinationPath = destinationPath, targetPackageId = targetPackageId)
         sync()
 
         println("  Ready")
     }
 
-    private fun pull(sourceFilePath: String, destinationPath: String) {
+    private fun pull(sourceFilePath: String, destinationPath: String, targetPackageId: String) {
         File(destinationPath).assurePath()
 
         val destinationFile = File(destinationPath, reportName)

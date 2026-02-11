@@ -47,13 +47,7 @@ import java.io.FileOutputStream
 open class ScreenshotPullTask : TestifyDefaultTask() {
 
     @get:Input
-    lateinit var screenshotDirectory: String
-
-    @get:Input
     lateinit var destinationImageDirectory: String
-
-    @get:Input
-    lateinit var targetPackageId: String
 
     @get:Input
     var isVerbose: Boolean = false
@@ -65,14 +59,15 @@ open class ScreenshotPullTask : TestifyDefaultTask() {
 
     override fun provideInput(project: Project) {
         super.provideInput(project)
-        screenshotDirectory = project.screenshotDirectory
         destinationImageDirectory = project.destinationImageDirectory
-        targetPackageId = project.testifySettings.targetPackageId
+        inputs.property("targetPackageId", project.testifySettings.targetPackageIdProvider)
         isVerbose = project.isVerbose
         pullWaitTime = project.testifySettings.pullWaitTime
     }
 
     override fun taskAction() {
+        val targetPackageId = project.testifySettings.targetPackageIdProvider.get()
+        val screenshotDirectory = project.screenshotDirectory(targetPackageId)
         println("  Pulling screenshots:")
 
         println()
@@ -93,13 +88,13 @@ open class ScreenshotPullTask : TestifyDefaultTask() {
 
         println("  ${failedScreenshots.size} images to be pulled")
 
-        pullScreenshots()
-        syncScreenshots()
+        pullScreenshots(targetPackageId, screenshotDirectory)
+        syncScreenshots(targetPackageId, screenshotDirectory)
 
         println("  Ready")
     }
 
-    private fun String.toLocalPath(): String {
+    private fun String.toLocalPath(screenshotDirectory: String): String {
         val src = screenshotDirectory
         val dst = destinationImageDirectory
         val dstFile = if (File(dst).isAbsolute) {
@@ -111,7 +106,7 @@ open class ScreenshotPullTask : TestifyDefaultTask() {
         return File(dstFile, "$SCREENSHOT_DIR${File.separatorChar}$key").path
     }
 
-    private fun pullScreenshots() {
+    private fun pullScreenshots(targetPackageId: String, screenshotDirectory: String) {
         val dst = destinationImageDirectory
         val dstFile = if (File(dst).isAbsolute) {
             File(dst)
@@ -127,10 +122,10 @@ open class ScreenshotPullTask : TestifyDefaultTask() {
         )
 
         failedScreenshots.forEach {
-            val localPath = it.toLocalPath()
+            val localPath = it.toLocalPath(screenshotDirectory)
 
             if (isVerbose) {
-                println(Info, "Copying $it to ${it.toLocalPath()}")
+                println(Info, "Copying $it to ${it.toLocalPath(screenshotDirectory)}")
             }
 
             File(localPath).parentFile.assurePath()
@@ -140,14 +135,14 @@ open class ScreenshotPullTask : TestifyDefaultTask() {
                 .runAs(targetPackageId)
                 .argument("cat")
                 .argument(it)
-                .stream(BinaryStream(FileOutputStream(it.toLocalPath())))
+                .stream(BinaryStream(FileOutputStream(it.toLocalPath(screenshotDirectory))))
                 .execute()
         }
 
         Thread.sleep(pullWaitTime)
     }
 
-    private fun syncScreenshots() {
+    private fun syncScreenshots(targetPackageId: String, screenshotDirectory: String) {
         val failedScreenshots = listFailedScreenshots(
             src = screenshotDirectory,
             dst = destinationImageDirectory,

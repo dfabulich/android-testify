@@ -42,24 +42,19 @@ import java.io.File
 open class ScreenshotClearTask : TestifyDefaultTask() {
 
     @get:Input
-    lateinit var screenshotDirectory: String
-
-    @get:Input
-    lateinit var targetPackageId: String
-
-    @get:Input
     var isVerbose: Boolean = false
 
     override fun getDescription() = "Remove any existing screenshot test images from the device"
 
     override fun provideInput(project: Project) {
         super.provideInput(project)
-        screenshotDirectory = project.screenshotDirectory
-        targetPackageId = project.testifySettings.targetPackageId
+        inputs.property("targetPackageId", project.testifySettings.targetPackageIdProvider)
         isVerbose = project.isVerbose
     }
 
     override fun taskAction() {
+        val targetPackageId = project.testifySettings.targetPackageIdProvider.get()
+        val screenshotDirectory = project.screenshotDirectory(targetPackageId)
         val failedScreenshots = listFailedScreenshotsWithPath(
             src = screenshotDirectory,
             targetPackageId = targetPackageId,

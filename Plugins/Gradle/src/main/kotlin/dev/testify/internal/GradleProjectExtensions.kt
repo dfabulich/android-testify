@@ -59,34 +59,3 @@ val Project.inferredAndroidTestInstallTask: String?
         return installTasks.firstOrNull()
     }
 
-val Project.inferredDefaultTestVariantId: String
-    get() {
-        return this.applicationTargetPackageId?.let { "$it.test" } ?: ""
-    }
-
-val Project.applicationTargetPackageId: String?
-    get() {
-        val appExtension = this.extensions.findByType(ApplicationExtension::class.java) ?: return null
-        return try {
-            val baseApplicationId = appExtension.defaultConfig.applicationId ?: return null
-
-            // Prefer debug build type suffix (most common for testing), fall back to any build type
-            val debugBuildType = appExtension.buildTypes.findByName("debug")
-            val buildType = debugBuildType ?: appExtension.buildTypes.firstOrNull()
-
-            val suffix = buildType?.applicationIdSuffix
-            if (suffix != null && suffix.isNotEmpty()) {
-                // Remove leading dot if present, then append with dot
-                val cleanSuffix = suffix.removePrefix(".")
-                "$baseApplicationId.$cleanSuffix"
-            } else {
-                baseApplicationId
-            }
-        } catch (e: Throwable) {
-            try {
-                appExtension.defaultConfig.applicationId
-            } catch (e2: Throwable) {
-                null
-            }
-        }
-    }
