@@ -43,51 +43,52 @@ import org.gradle.api.provider.Provider
  */
 internal object VariantPackageIdStore {
 
-    private val appPackageIds = mutableMapOf<Project, MutableList<Pair<String, Provider<String>>>>()
-    private val testPackageIds = mutableMapOf<Project, MutableList<Pair<String, Provider<String>>>>()
+    private val appPackageIds = mutableMapOf<String, MutableList<Pair<String, Provider<String>>>>()
+    private val testPackageIds = mutableMapOf<String, MutableList<Pair<String, Provider<String>>>>()
 
     fun register(project: Project) {
+        val projectPath = project.path
         val appComponents = project.extensions.findByType(ApplicationAndroidComponentsExtension::class.java)
         val libComponents = project.extensions.findByType(LibraryAndroidComponentsExtension::class.java)
 
         appComponents?.let { components ->
-            appPackageIds[project] = mutableListOf()
-            testPackageIds[project] = mutableListOf()
+            appPackageIds[projectPath] = mutableListOf()
+            testPackageIds[projectPath] = mutableListOf()
             components.onVariants(components.selector().withBuildType("debug")) { variant ->
                 val appVariant = variant as ApplicationVariant
-                appPackageIds[project]!!.add(variant.name to appVariant.applicationId)
+                appPackageIds[projectPath]!!.add(variant.name to appVariant.applicationId)
                 val androidTest = appVariant.deviceTests[DeviceTestBuilder.ANDROID_TEST_TYPE]
                 if (androidTest != null) {
                     val flavorKey = appVariant.flavorName ?: ""
-                    testPackageIds[project]!!.add(flavorKey to androidTest.applicationId)
+                    testPackageIds[projectPath]!!.add(flavorKey to androidTest.applicationId)
                 }
             }
         }
 
         libComponents?.let { components ->
-            if (!testPackageIds.containsKey(project)) {
-                testPackageIds[project] = mutableListOf()
+            if (!testPackageIds.containsKey(projectPath)) {
+                testPackageIds[projectPath] = mutableListOf()
             }
             components.onVariants(components.selector().withBuildType("debug")) { variant ->
                 val libVariant = variant as LibraryVariant
                 val androidTest = libVariant.deviceTests[DeviceTestBuilder.ANDROID_TEST_TYPE]
                 if (androidTest != null) {
                     val flavorKey = libVariant.flavorName ?: ""
-                    testPackageIds[project]!!.add(flavorKey to androidTest.applicationId)
+                    testPackageIds[projectPath]!!.add(flavorKey to androidTest.applicationId)
                 }
             }
         }
     }
 
     fun getApplicationPackageIdProvider(project: Project): Provider<String>? {
-        val entries = appPackageIds[project] ?: return null
+        val entries = appPackageIds[project.path] ?: return null
         return project.provider {
             entries.minByOrNull { it.first }?.second?.get() ?: ""
         }
     }
 
     fun getTestPackageIdProvider(project: Project): Provider<String>? {
-        val entries = testPackageIds[project] ?: return null
+        val entries = testPackageIds[project.path] ?: return null
         return project.provider {
             entries.minByOrNull { it.first }?.second?.get() ?: ""
         }

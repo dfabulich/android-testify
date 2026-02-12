@@ -31,23 +31,48 @@ import dev.testify.testifySettings
 import org.gradle.api.Project
 import java.io.File
 
-internal fun Project.root(targetPackageId: String): String {
+internal fun Project.root(targetPackageId: String): String =
+    computeRoot(targetPackageId, testifySettings.useSdCard, testifySettings.rootDestinationDirectory)
+
+internal fun Project.screenshotDirectory(targetPackageId: String): String =
+    computeScreenshotDirectory(targetPackageId, testifySettings.useSdCard, testifySettings.rootDestinationDirectory)
+
+/**
+ * Pure functions for path computation - safe to call at task execution time without Project.
+ * Used for configuration cache compatibility.
+ */
+internal fun computeRoot(
+    targetPackageId: String,
+    useSdCard: Boolean,
+    rootDestinationDirectory: String?
+): String {
     @Suppress("SdCardPath")
-    return testifySettings.rootDestinationDirectory ?: if (testifySettings.useSdCard) {
+    return rootDestinationDirectory ?: if (useSdCard) {
         "/sdcard/Android/data/$targetPackageId/files/testify_"
     } else {
         "./app_"
     }
 }
 
-internal fun Project.screenshotDirectory(targetPackageId: String): String {
-    val r = root(targetPackageId)
-    return if (testifySettings.useSdCard) {
+internal fun computeScreenshotDirectory(
+    targetPackageId: String,
+    useSdCard: Boolean,
+    rootDestinationDirectory: String?
+): String {
+    val r = computeRoot(targetPackageId, useSdCard, rootDestinationDirectory)
+    return if (useSdCard) {
         "${r}images/"
     } else {
         "${r}images/$SCREENSHOT_DIR"
     }
 }
+
+internal fun computeReportFilePath(
+    targetPackageId: String,
+    useSdCard: Boolean,
+    rootDestinationDirectory: String?
+): String =
+    computeRoot(targetPackageId, useSdCard, rootDestinationDirectory).replace("testify_", "") + "testify"
 
 internal fun Adb.listFiles(path: String): List<String> {
     val log = this
@@ -91,7 +116,7 @@ internal fun listFailedScreenshots(
 }
 
 internal fun Project.reportFilePath(targetPackageId: String): String =
-    "${root(targetPackageId).replace("testify_", "")}testify"
+    computeReportFilePath(targetPackageId, testifySettings.useSdCard, testifySettings.rootDestinationDirectory)
 
 internal fun File.deleteOnDevice(targetPackageId: String) {
     Adb()

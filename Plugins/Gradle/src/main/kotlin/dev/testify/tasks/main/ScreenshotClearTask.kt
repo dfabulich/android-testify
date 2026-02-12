@@ -27,16 +27,18 @@ package dev.testify.tasks.main
 import dev.testify.internal.Style.Failure
 import dev.testify.internal.Style.FailureHeader
 import dev.testify.internal.Style.Success
-import dev.testify.internal.deleteOnDevice
+import dev.testify.internal.computeScreenshotDirectory
 import dev.testify.internal.isVerbose
+import dev.testify.testifySettings
+import dev.testify.internal.deleteOnDevice
 import dev.testify.internal.listFailedScreenshotsWithPath
 import dev.testify.internal.println
-import dev.testify.internal.screenshotDirectory
 import dev.testify.tasks.internal.TaskNameProvider
 import dev.testify.tasks.internal.TestifyDefaultTask
-import dev.testify.testifySettings
 import org.gradle.api.Project
+import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.Optional
 import java.io.File
 
 open class ScreenshotClearTask : TestifyDefaultTask() {
@@ -44,17 +46,30 @@ open class ScreenshotClearTask : TestifyDefaultTask() {
     @get:Input
     var isVerbose: Boolean = false
 
+    @get:Input
+    var useSdCard: Boolean = false
+
+    @get:Optional
+    @get:Input
+    var rootDestinationDirectory: String? = null
+
     override fun getDescription() = "Remove any existing screenshot test images from the device"
+
+    private val targetPackageIdProperty: Property<String> =
+        project.objects.property(String::class.java)
 
     override fun provideInput(project: Project) {
         super.provideInput(project)
-        inputs.property("targetPackageId", project.testifySettings.targetPackageIdProvider)
+        targetPackageIdProperty.set(project.testifySettings.targetPackageIdProvider)
+        inputs.property("targetPackageId", targetPackageIdProperty)
         isVerbose = project.isVerbose
+        useSdCard = project.testifySettings.useSdCard
+        rootDestinationDirectory = project.testifySettings.rootDestinationDirectory
     }
 
     override fun taskAction() {
-        val targetPackageId = project.testifySettings.targetPackageIdProvider.get()
-        val screenshotDirectory = project.screenshotDirectory(targetPackageId)
+        val targetPackageId = targetPackageIdProperty.get()
+        val screenshotDirectory = computeScreenshotDirectory(targetPackageId, useSdCard, rootDestinationDirectory)
         val failedScreenshots = listFailedScreenshotsWithPath(
             src = screenshotDirectory,
             targetPackageId = targetPackageId,

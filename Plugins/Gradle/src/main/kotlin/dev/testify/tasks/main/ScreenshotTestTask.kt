@@ -40,6 +40,7 @@ import dev.testify.tasks.utility.LocaleTask
 import dev.testify.tasks.utility.TimeZoneTask
 import dev.testify.testifySettings
 import org.gradle.api.Project
+import org.gradle.api.provider.Property
 import org.gradle.api.Task
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.Internal
@@ -79,6 +80,9 @@ open class ScreenshotTestTask : TestifyDefaultTask() {
 
     @get:Input
     var useSdCard: Boolean = false
+
+    private val testPackageIdProperty: Property<String> =
+        project.objects.property(String::class.java)
 
     override fun getDescription() = "Run the Testify screenshot tests"
 
@@ -143,13 +147,14 @@ open class ScreenshotTestTask : TestifyDefaultTask() {
         shardIndex = project.properties["shardIndex"] as Int?
         testClass = project.properties["testClass"] as String?
         testName = project.properties["testName"] as String?
-        inputs.property("testPackageId", project.testifySettings.testPackageIdProvider)
+        testPackageIdProperty.set(project.testifySettings.testPackageIdProvider)
+        inputs.property("testPackageId", testPackageIdProperty)
         testRunner = project.testifySettings.testRunner
         useSdCard = "TESTIFY_USE_SDCARD".fromEnv(project.testifySettings.useSdCard)
     }
 
     override fun taskAction() {
-        val testPackageId = project.testifySettings.testPackageIdProvider.get()
+        val testPackageId = testPackageIdProperty.get()
         val testOptions = TestOptionsBuilder()
         testOptions
             .addAll(shardParams)

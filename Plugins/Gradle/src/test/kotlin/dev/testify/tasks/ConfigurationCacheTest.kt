@@ -53,7 +53,13 @@ class ConfigurationCacheTest {
             ).apply {
                 writeText("plugins { id 'dev.testify' }")
             }
+            // Clear configuration cache to avoid interference from previous builds.
+            // CI starts fresh, but local runs may have stale cache.
+            File(projectDir, ".gradle/configuration-cache").takeIf { it.exists() }?.deleteRecursively()
         }
+
+        private val projectDir: File
+            get() = File("../..")
     }
 
     private fun testConfigurationCache(taskName: String): BuildResult =
