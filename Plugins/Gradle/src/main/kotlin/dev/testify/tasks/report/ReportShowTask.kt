@@ -30,32 +30,36 @@ import dev.testify.internal.StreamData
 import dev.testify.internal.Style.Failure
 import dev.testify.internal.listFiles
 import dev.testify.internal.println
-import dev.testify.internal.reportFilePath
+import dev.testify.internal.computeReportFilePath
+import dev.testify.testifySettings
 import dev.testify.tasks.internal.DEFAULT_REPORT_FILE_NAME
 import dev.testify.tasks.internal.ReportTask
 import dev.testify.tasks.internal.TaskNameProvider
-import dev.testify.testifySettings
 import org.gradle.api.Project
+import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
 
 open class ReportShowTask : ReportTask() {
 
-    @get:Input
-    lateinit var reportFilePath: String
+    private val targetPackageIdProperty: Property<String> =
+        project.objects.property(String::class.java)
 
-    @get:Input
-    lateinit var targetPackageId: String
+    private var useSdCard: Boolean = false
+    private var rootDestinationDirectory: String? = null
 
     override fun getDescription() = "Print the test result report to the console"
 
     override fun provideInput(project: Project) {
         super.provideInput(project)
-        reportFilePath = project.reportFilePath
-        targetPackageId = project.testifySettings.targetPackageId
+        targetPackageIdProperty.set(project.testifySettings.targetPackageIdProvider)
+        inputs.property("targetPackageId", targetPackageIdProperty)
+        useSdCard = project.testifySettings.useSdCard
+        rootDestinationDirectory = project.testifySettings.rootDestinationDirectory
     }
 
     override fun taskAction() {
-        val reportFilePath = reportFilePath
+        val targetPackageId = targetPackageIdProperty.get()
+        val reportFilePath = computeReportFilePath(targetPackageId, useSdCard, rootDestinationDirectory)
         val files = Adb()
             .shell()
             .runAs(targetPackageId)
@@ -67,10 +71,10 @@ open class ReportShowTask : ReportTask() {
             return
         }
 
-        show(sourceFilePath = file)
+        show(sourceFilePath = file, targetPackageId = targetPackageId)
     }
 
-    private fun show(sourceFilePath: String) {
+    private fun show(sourceFilePath: String, targetPackageId: String) {
         Adb()
             .execOut()
             .runAs(targetPackageId)

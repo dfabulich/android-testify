@@ -34,13 +34,14 @@ import dev.testify.internal.assurePath
 import dev.testify.internal.isVerbose
 import dev.testify.internal.listFiles
 import dev.testify.internal.println
-import dev.testify.internal.reportFilePath
+import dev.testify.internal.computeReportFilePath
+import dev.testify.testifySettings
 import dev.testify.tasks.internal.DEFAULT_REPORT_FILE_NAME
 import dev.testify.tasks.internal.ReportTask
 import dev.testify.tasks.internal.TaskNameProvider
 import dev.testify.tasks.main.ScreenshotPullTask
-import dev.testify.testifySettings
 import org.gradle.api.Project
+import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
 import java.io.File
 import java.io.FileOutputStream
@@ -48,32 +49,34 @@ import java.io.FileOutputStream
 open class ReportPullTask : ReportTask() {
 
     @get:Input
-    lateinit var reportFilePath: String
-
-    @get:Input
-    lateinit var targetPackageId: String
-
-    @get:Input
     var isVerbose: Boolean = false
 
     @get:Input
     var pullWaitTime: Long = 0L
+
+    private val targetPackageIdProperty: Property<String> =
+        project.objects.property(String::class.java)
+
+    private var useSdCard: Boolean = false
+    private var rootDestinationDirectory: String? = null
 
     override fun getDescription() =
         "Pull $DEFAULT_REPORT_FILE_NAME from the device and wait for it to be committed to disk"
 
     override fun provideInput(project: Project) {
         super.provideInput(project)
-        reportFilePath = project.reportFilePath
-        targetPackageId = project.testifySettings.targetPackageId
+        targetPackageIdProperty.set(project.testifySettings.targetPackageIdProvider)
+        inputs.property("targetPackageId", targetPackageIdProperty)
         isVerbose = project.isVerbose
         pullWaitTime = project.testifySettings.pullWaitTime
+        useSdCard = project.testifySettings.useSdCard
+        rootDestinationDirectory = project.testifySettings.rootDestinationDirectory
     }
 
     override fun taskAction() {
+        val targetPackageId = targetPackageIdProperty.get()
+        val reportFilePath = computeReportFilePath(targetPackageId, useSdCard, rootDestinationDirectory)
         println("  Pulling report:")
-
-        val reportFilePath = reportFilePath
         val files = Adb()
             .shell()
             .runAs(targetPackageId)
@@ -92,13 +95,13 @@ open class ReportPullTask : ReportTask() {
             return
         }
 
-        pull(sourceFilePath = file, destinationPath = destinationPath)
+        pull(sourceFilePath = file, destinationPath = destinationPath, targetPackageId = targetPackageId)
         sync()
 
         println("  Ready")
     }
 
-    private fun pull(sourceFilePath: String, destinationPath: String) {
+    private fun pull(sourceFilePath: String, destinationPath: String, targetPackageId: String) {
         File(destinationPath).assurePath()
 
         val destinationFile = File(destinationPath, reportName)

@@ -31,20 +31,48 @@ import dev.testify.testifySettings
 import org.gradle.api.Project
 import java.io.File
 
-internal val Project.root: String
+internal fun Project.root(targetPackageId: String): String =
+    computeRoot(targetPackageId, testifySettings.useSdCard, testifySettings.rootDestinationDirectory)
+
+internal fun Project.screenshotDirectory(targetPackageId: String): String =
+    computeScreenshotDirectory(targetPackageId, testifySettings.useSdCard, testifySettings.rootDestinationDirectory)
+
+/**
+ * Pure functions for path computation - safe to call at task execution time without Project.
+ * Used for configuration cache compatibility.
+ */
+internal fun computeRoot(
+    targetPackageId: String,
+    useSdCard: Boolean,
+    rootDestinationDirectory: String?
+): String {
     @Suppress("SdCardPath")
-    get() = testifySettings.rootDestinationDirectory ?: if (testifySettings.useSdCard) {
-        "/sdcard/Android/data/${testifySettings.targetPackageId}/files/testify_"
+    return rootDestinationDirectory ?: if (useSdCard) {
+        "/sdcard/Android/data/$targetPackageId/files/testify_"
     } else {
         "./app_"
     }
+}
 
-internal val Project.screenshotDirectory: String
-    get() = if (testifySettings.useSdCard) {
-        "${root}images/"
+internal fun computeScreenshotDirectory(
+    targetPackageId: String,
+    useSdCard: Boolean,
+    rootDestinationDirectory: String?
+): String {
+    val r = computeRoot(targetPackageId, useSdCard, rootDestinationDirectory)
+    return if (useSdCard) {
+        "${r}images/"
     } else {
-        "${root}images/$SCREENSHOT_DIR"
+        "${r}images/$SCREENSHOT_DIR"
     }
+}
+
+internal fun computeReportFilePath(
+    targetPackageId: String,
+    useSdCard: Boolean,
+    rootDestinationDirectory: String?
+): String =
+    computeRoot(targetPackageId, useSdCard, rootDestinationDirectory).replace("testify_", "") + "testify"
 
 internal fun Adb.listFiles(path: String): List<String> {
     val log = this
@@ -87,8 +115,8 @@ internal fun listFailedScreenshots(
     return files.map { it.replace(src, dst) }
 }
 
-internal val Project.reportFilePath: String
-    get() = "${root.replace("testify_", "")}testify"
+internal fun Project.reportFilePath(targetPackageId: String): String =
+    computeReportFilePath(targetPackageId, testifySettings.useSdCard, testifySettings.rootDestinationDirectory)
 
 internal fun File.deleteOnDevice(targetPackageId: String) {
     Adb()

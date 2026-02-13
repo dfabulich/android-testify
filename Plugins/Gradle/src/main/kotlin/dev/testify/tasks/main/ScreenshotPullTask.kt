@@ -30,16 +30,16 @@ import dev.testify.internal.StreamData.BinaryStream
 import dev.testify.internal.Style.Info
 import dev.testify.internal.Style.Success
 import dev.testify.internal.assurePath
-import dev.testify.internal.destinationImageDirectory
+import dev.testify.internal.computeScreenshotDirectory
 import dev.testify.internal.isVerbose
+import dev.testify.testifySettings
 import dev.testify.internal.listFailedScreenshots
 import dev.testify.internal.listFailedScreenshotsWithPath
 import dev.testify.internal.println
-import dev.testify.internal.screenshotDirectory
 import dev.testify.tasks.internal.TaskNameProvider
 import dev.testify.tasks.internal.TestifyDefaultTask
-import dev.testify.testifySettings
 import org.gradle.api.Project
+import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
 import java.io.File
 import java.io.FileOutputStream
@@ -47,13 +47,7 @@ import java.io.FileOutputStream
 open class ScreenshotPullTask : TestifyDefaultTask() {
 
     @get:Input
-    lateinit var screenshotDirectory: String
-
-    @get:Input
     lateinit var destinationImageDirectory: String
-
-    @get:Input
-    lateinit var targetPackageId: String
 
     @get:Input
     var isVerbose: Boolean = false
@@ -61,18 +55,32 @@ open class ScreenshotPullTask : TestifyDefaultTask() {
     @get:Input
     var pullWaitTime: Long = 0L
 
+    private val targetPackageIdProperty: Property<String> =
+        project.objects.property(String::class.java)
+
+    private var useSdCard: Boolean = false
+    private var rootDestinationDirectory: String? = null
+
+    @get:Input
+    lateinit var projectDirPath: String
+
     override fun getDescription() = "Pull screenshots from the device and wait for all files to be committed to disk"
 
     override fun provideInput(project: Project) {
         super.provideInput(project)
-        screenshotDirectory = project.screenshotDirectory
-        destinationImageDirectory = project.destinationImageDirectory
-        targetPackageId = project.testifySettings.targetPackageId
+        destinationImageDirectory = "${project.testifySettings.baselineSourceDir}${File.separatorChar}"
+        targetPackageIdProperty.set(project.testifySettings.targetPackageIdProvider)
+        inputs.property("targetPackageId", targetPackageIdProperty)
         isVerbose = project.isVerbose
         pullWaitTime = project.testifySettings.pullWaitTime
+        useSdCard = project.testifySettings.useSdCard
+        rootDestinationDirectory = project.testifySettings.rootDestinationDirectory
+        projectDirPath = project.projectDir.absolutePath
     }
 
     override fun taskAction() {
+        val targetPackageId = targetPackageIdProperty.get()
+        val screenshotDirectory = computeScreenshotDirectory(targetPackageId, useSdCard, rootDestinationDirectory)
         println("  Pulling screenshots:")
 
         println()
@@ -93,30 +101,30 @@ open class ScreenshotPullTask : TestifyDefaultTask() {
 
         println("  ${failedScreenshots.size} images to be pulled")
 
-        pullScreenshots()
-        syncScreenshots()
+        pullScreenshots(targetPackageId, screenshotDirectory)
+        syncScreenshots(targetPackageId, screenshotDirectory)
 
         println("  Ready")
     }
 
-    private fun String.toLocalPath(): String {
+    private fun String.toLocalPath(screenshotDirectory: String): String {
         val src = screenshotDirectory
         val dst = destinationImageDirectory
         val dstFile = if (File(dst).isAbsolute) {
             File(dst)
         } else {
-            File(project.projectDir, dst)
+            File(projectDirPath, dst)
         }
         val key = this.removePrefix("$src/").replace('/', File.separatorChar)
         return File(dstFile, "$SCREENSHOT_DIR${File.separatorChar}$key").path
     }
 
-    private fun pullScreenshots() {
+    private fun pullScreenshots(targetPackageId: String, screenshotDirectory: String) {
         val dst = destinationImageDirectory
         val dstFile = if (File(dst).isAbsolute) {
             File(dst)
         } else {
-            File(project.projectDir, dst)
+            File(projectDirPath, dst)
         }
         dstFile.assurePath()
 
@@ -127,10 +135,10 @@ open class ScreenshotPullTask : TestifyDefaultTask() {
         )
 
         failedScreenshots.forEach {
-            val localPath = it.toLocalPath()
+            val localPath = it.toLocalPath(screenshotDirectory)
 
             if (isVerbose) {
-                println(Info, "Copying $it to ${it.toLocalPath()}")
+                println(Info, "Copying $it to ${it.toLocalPath(screenshotDirectory)}")
             }
 
             File(localPath).parentFile.assurePath()
@@ -140,14 +148,14 @@ open class ScreenshotPullTask : TestifyDefaultTask() {
                 .runAs(targetPackageId)
                 .argument("cat")
                 .argument(it)
-                .stream(BinaryStream(FileOutputStream(it.toLocalPath())))
+                .stream(BinaryStream(FileOutputStream(it.toLocalPath(screenshotDirectory))))
                 .execute()
         }
 
         Thread.sleep(pullWaitTime)
     }
 
-    private fun syncScreenshots() {
+    private fun syncScreenshots(targetPackageId: String, screenshotDirectory: String) {
         val failedScreenshots = listFailedScreenshots(
             src = screenshotDirectory,
             dst = destinationImageDirectory,

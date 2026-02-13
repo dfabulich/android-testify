@@ -27,16 +27,23 @@ package dev.testify.tasks.utility
 
 import dev.testify.internal.Adb
 import dev.testify.internal.Device
-import dev.testify.internal.reportFilePath
-import dev.testify.internal.screenshotDirectory
+import dev.testify.internal.computeReportFilePath
+import dev.testify.testifySettings
+import dev.testify.internal.computeScreenshotDirectory
 import dev.testify.tasks.internal.TaskNameProvider
 import dev.testify.tasks.internal.TestifyUtilityTask
-import dev.testify.testifySettings
 import org.gradle.api.Project
+import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.Optional
 
 open class SettingsTask : TestifyUtilityTask() {
+
+    private val targetPackageIdProperty: Property<String> =
+        project.objects.property(String::class.java)
+
+    private val testPackageIdProperty: Property<String> =
+        project.objects.property(String::class.java)
 
     override val isDeviceRequired = false
 
@@ -45,15 +52,6 @@ open class SettingsTask : TestifyUtilityTask() {
 
     @get:Input
     lateinit var moduleName: String
-
-    @get:Input
-    lateinit var screenshotDirectory: String
-
-    @get:Input
-    lateinit var targetPackageId: String
-
-    @get:Input
-    lateinit var testPackageId: String
 
     @get:Input
     lateinit var testRunner: String
@@ -84,6 +82,10 @@ open class SettingsTask : TestifyUtilityTask() {
 
     @get:Optional
     @get:Input
+    var rootDestinationDirectory: String? = null
+
+    @get:Optional
+    @get:Input
     var reportFilePath: String? = null
 
     @get:Optional
@@ -94,27 +96,31 @@ open class SettingsTask : TestifyUtilityTask() {
 
     override fun provideInput(project: Project) {
         super.provideInput(project)
-        with(project.testifySettings) {
-            this@SettingsTask.baselineSourceDir = this.baselineSourceDir
-            this@SettingsTask.installAndroidTestTask = this.installAndroidTestTask
-            this@SettingsTask.installTask = this.installTask
-            this@SettingsTask.isRecordMode = this.isRecordMode
-            this@SettingsTask.moduleName = this.moduleName
-            this@SettingsTask.outputFileNameFormat = this.outputFileNameFormat
-            this@SettingsTask.pullWaitTime = this.pullWaitTime
-            this@SettingsTask.screenshotAnnotation = this.screenshotAnnotation
-            this@SettingsTask.targetPackageId = this.targetPackageId
-            this@SettingsTask.testPackageId = this.testPackageId
-            this@SettingsTask.testRunner = this.testRunner
-            this@SettingsTask.useSdCard = this.useSdCard
-            this@SettingsTask.useTestStorage = this.useTestStorage
-        }
-        this@SettingsTask.reportFilePath = project.reportFilePath
-        this@SettingsTask.screenshotDirectory = project.screenshotDirectory
+        val settings = project.testifySettings
+        baselineSourceDir = settings.baselineSourceDir
+        installAndroidTestTask = settings.installAndroidTestTask
+        installTask = settings.installTask
+        isRecordMode = settings.isRecordMode
+        moduleName = settings.moduleName
+        outputFileNameFormat = settings.outputFileNameFormat
+        pullWaitTime = settings.pullWaitTime
+        screenshotAnnotation = settings.screenshotAnnotation
+        targetPackageIdProperty.set(settings.targetPackageIdProvider)
+        testPackageIdProperty.set(settings.testPackageIdProvider)
+        inputs.property("targetPackageId", targetPackageIdProperty)
+        inputs.property("testPackageId", testPackageIdProperty)
+        testRunner = settings.testRunner
+        useSdCard = settings.useSdCard
+        useTestStorage = settings.useTestStorage
+        rootDestinationDirectory = settings.rootDestinationDirectory
     }
 
     override fun taskAction() {
         val userId = Adb.forcedUser?.toString() ?: Device.user.takeUnless { Device.isEmpty } ?: "Device not found"
+        val targetPackageId = targetPackageIdProperty.get()
+        val testPackageId = testPackageIdProperty.get()
+        val reportFilePath = computeReportFilePath(targetPackageId, useSdCard, rootDestinationDirectory)
+        val screenshotDirectory = computeScreenshotDirectory(targetPackageId, useSdCard, rootDestinationDirectory)
 
         println("  baselineSourceDir      = $baselineSourceDir")
         println("  installAndroidTestTask = $installAndroidTestTask")
